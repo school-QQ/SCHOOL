@@ -40,8 +40,7 @@ async function load(){const R=await Promise.all([sb.from('classes').select('*').
  const e=R.map(r=>r.error).find(Boolean);if(e)return toast('خطأ في تحميل البيانات: '+e.message,1);
  S.classes=R[0].data;S.students=R[1].data;S.pays=R[2].data;S.set=Object.fromEntries(R[3].data.map(r=>[r.key,r.value]));const X=await sb.from('expenses').select('*').order('spent_on',{ascending:false});S.expErr=!!X.error;S.exp=X.error?[]:X.data;refresh()}
 // ---- التنقل: الرئيسية / الطلاب / المصروفات
-const STU_HTML=`<div class="tools"><input id="q" placeholder="ابحث عن طالب..." oninput="render()"><div class="chips"><button class="chip" data-a="flt" data-k="all">الكل</button><button class="chip" data-a="flt" data-k="sib">لديه أخ</button><button class="chip" data-a="flt" data-k="unp">لم يدفعوا هذا الشهر</button></div></div><div id="list"></div>`;
-const cats=()=>[...new Set(S.exp.map(e=>e.category).filter(Boolean))].sort();
+const STU_HTML=`<div class="tools"><input id="q" placeholder="ابحث عن طالب..." oninput="render()"><div class="chips"><button class="chip" data-a="flt" data-k="all">الكل</button><button class="chip" data-a="flt" data-k="unp">لم يدفعوا هذا الشهر</button></div></div><div id="list"></div>`;
 const MN=['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
 function refresh(){const v=S.view;$('#bar').hidden=false;$('#homeb').hidden=v==='home';$('#addb').hidden=v!=='students';$('#admb').hidden=!S.me||S.me.role!=='admin';
  if(v==='students'){if(!$('#list'))$('#main').innerHTML=STU_HTML;render()}else if(v==='exp')expView();else homeView()}
@@ -49,24 +48,35 @@ function go(v){S.view=v;$('#main').innerHTML='';refresh()}
 A.go=d=>go(d.v);A.home=()=>go('home');
 function homeView(){const m=ym(),tm=S.exp.filter(e=>e.spent_on.startsWith(m)).reduce((a,e)=>a+Number(e.amount),0);
  $('#main').innerHTML=`<div class="tiles"><button class="tile" data-a="go" data-v="students"><span class="ti">🎓</span>الطلاب<small>${S.students.length} طالب</small></button><button class="tile" data-a="go" data-v="exp"><span class="ti">🧾</span>المصروفات<small>هذا الشهر: ${money(tm)}</small></button></div>`}
+const lst=k=>{try{const a=JSON.parse(S.set[k]||'[]');return Array.isArray(a)?a:[]}catch(e){return[]}};
+const expFilt=()=>S.exp.filter(e=>e.spent_on.slice(0,4)===S.ey&&(S.em==='00'||e.spent_on.slice(5,7)===S.em)&&(!S.ec||e.category===S.ec));
 function expView(){if(S.expErr){$('#main').innerHTML='<div class="card"><div class="det"><p>جدول المصروفات غير مُنشأ بعد. شغّل ملف step3-expenses.sql في Supabase (SQL Editor) ثم حدّث الصفحة.</p></div></div>';return}
+ if(S.ec&&!lst('exp_reasons').includes(S.ec))S.ec='';
  const years=[...new Set([String(new Date().getFullYear()),S.ey,...S.exp.map(e=>e.spent_on.slice(0,4))])].sort().reverse();
- $('#main').innerHTML=`<div class="tools"><div class="fl"><select id="ey">${years.map(y=>`<option ${y===S.ey?'selected':''}>${y}</option>`).join('')}</select><select id="em"><option value="00">كل الأشهر</option>${MN.map((n,i)=>{const v=String(i+1).padStart(2,'0');return `<option value="${v}" ${v===S.em?'selected':''}>${n}</option>`}).join('')}</select></div><select id="ec"><option value="">كل الأسباب</option>${cats().map(c=>`<option ${c===S.ec?'selected':''}>${esc(c)}</option>`).join('')}</select><button class="pri" style="width:100%" data-a="newE">➕ إضافة مصروف</button></div><div id="elist"></div>`;
+ $('#main').innerHTML=`<div class="tools"><div class="fl"><select id="ey">${years.map(y=>`<option ${y===S.ey?'selected':''}>${y}</option>`).join('')}</select><select id="em"><option value="00">كل الأشهر</option>${MN.map((n,i)=>{const v=String(i+1).padStart(2,'0');return `<option value="${v}" ${v===S.em?'selected':''}>${n}</option>`}).join('')}</select></div><select id="ec"><option value="">كل الأسباب</option>${lst('exp_reasons').map(c=>`<option ${c===S.ec?'selected':''}>${esc(c)}</option>`).join('')}</select><div class="bt"><button class="pri" data-a="newE">➕ إضافة مصروف</button><button data-a="lists">📋 الأسماء والأسباب</button></div></div><div id="elist"></div>`;
  $('#ey').onchange=e=>{S.ey=e.target.value;expList()};$('#em').onchange=e=>{S.em=e.target.value;expList()};$('#ec').onchange=e=>{S.ec=e.target.value;expList()};expList()}
-function expList(){const L=S.exp.filter(e=>e.spent_on.slice(0,4)===S.ey&&(S.em==='00'||e.spent_on.slice(5,7)===S.em)&&(!S.ec||e.category===S.ec)),G={};
+function expList(){const L=expFilt(),G={};
  L.forEach(e=>{const k=e.spent_on.slice(0,7);(G[k]=G[k]||[]).push(e)});
  const tot=L.reduce((a,e)=>a+Number(e.amount),0);
  let h=`<div class="sumbar"><span>إجمالي المصروفات (${L.length})</span><b>${money(tot)}</b></div>`;
  h+=Object.keys(G).map(k=>{const op=(k in S.eo)?S.eo[k]:S.em!=='00',T=G[k].reduce((a,e)=>a+Number(e.amount),0);
   return `<section class="cls"><div class="ch"><button class="ct" data-a="togE" data-k="${k}">${op?'▾':'▸'} 📅 ${MN[+k.slice(5)-1]} ${k.slice(0,4)} <b>${money(T)}</b></button></div>${op?G[k].map(e=>`<div class="row"><div class="av">🧾</div><div class="nm"><div class="n">${esc(e.name)}</div><div class="sub">${e.category?`<span class="b cat">${esc(e.category)}</span>`:''}<span>${e.spent_on}</span></div></div><div class="amt">${money(e.amount)}</div><button class="ib" data-a="editE" data-id="${e.id}" title="تعديل">${IC.ed}</button></div>`).join(''):''}</section>`}).join('')||'<p class="empty">لا توجد مصروفات في هذه الفترة</p>';
+ if(L.length)h+='<button class="pri" style="width:100%;margin:6px 0 24px" data-a="dlE">⬇️ تحميل الجدول (PDF / Word)</button>';
  $('#elist').innerHTML=h}
 A.togE=d=>{const op=(d.k in S.eo)?S.eo[d.k]:S.em!=='00';S.eo[d.k]=!op;expList()};
-function expForm(e){e=e||{};M(`<h3>${e.id?'تعديل مصروف':'مصروف جديد'}</h3>${F('x_n','اسم المصروف',e.name)}<label>سبب المصروف (مثال: أكل، رواتب، مكافآت)<input id="x_c" list="cats" value="${esc(e.category||'')}"><datalist id="cats">${cats().map(c=>`<option value="${esc(c)}">`).join('')}</datalist></label>${F('x_a','المبلغ',e.amount,'number')}${F('x_d','التاريخ',e.spent_on||today(),'date')}<div class="bt"><button class="pri" data-a="saveE" data-id="${e.id||''}">💾 حفظ</button><button data-a="x">إلغاء</button></div>${e.id?`<button class="dn" data-a="delE" data-id="${e.id}">🗑 حذف المصروف</button>`:''}`)}
+const opt=(a,v)=>'<option value="">اختر...</option>'+(v&&!a.includes(v)?[v,...a]:a).map(x=>`<option ${x===v?'selected':''}>${esc(x)}</option>`).join('');
+function expForm(e){e=e||{};const nn=lst('exp_names'),rr=lst('exp_reasons');M(`<h3>${e.id?'تعديل مصروف':'مصروف جديد'}</h3>${(!nn.length||!rr.length)?'<p class="note">أضف الأسماء والأسباب أولاً من زر «الأسماء والأسباب» في الأعلى.</p>':''}<label>الاسم<select id="x_n">${opt(nn,e.name)}</select></label><label>سبب المصروف<select id="x_c">${opt(rr,e.category)}</select></label>${F('x_a','المبلغ',e.amount,'number')}${F('x_d','التاريخ',e.spent_on||today(),'date')}<div class="bt"><button class="pri" data-a="saveE" data-id="${e.id||''}">💾 حفظ</button><button data-a="x">إلغاء</button></div>${e.id?`<button class="dn" data-a="delE" data-id="${e.id}">🗑 حذف المصروف</button>`:''}`)}
 A.newE=()=>expForm();A.editE=d=>expForm(S.exp.find(x=>x.id==d.id));
-A.saveE=d=>{const r={name:$('#x_n').value.trim(),category:$('#x_c').value.trim(),amount:+$('#x_a').value,spent_on:$('#x_d').value};if(!r.name||!r.category||!(r.amount>0)||!r.spent_on)return toast('اكتب الاسم والسبب والمبلغ والتاريخ',1);
+A.saveE=d=>{const r={name:$('#x_n').value,category:$('#x_c').value,amount:+$('#x_a').value,spent_on:$('#x_d').value};if(!r.name||!r.category||!(r.amount>0)||!r.spent_on)return toast('اختر الاسم والسبب واكتب المبلغ والتاريخ',1);
  S.ey=r.spent_on.slice(0,4);S.em=r.spent_on.slice(5,7);S.eo[r.spent_on.slice(0,7)]=true;
  return db(d.id?sb.from('expenses').update(r).eq('id',d.id):sb.from('expenses').insert(r),'تم حفظ المصروف ✅')};
 A.delE=d=>{if(confirm('حذف هذا المصروف؟'))db(sb.from('expenses').delete().eq('id',d.id),'تم الحذف')};
+function listsM(){const blk=(k,t,ph,id)=>`<h4>${t}</h4>${lst(k).map((n,i)=>`<div class="py"><span>${esc(n)}</span><button data-a="delL" data-k="${k}" data-i="${i}">✖</button></div>`).join('')||'<p class="note">لا يوجد شيء بعد</p>'}<div class="addl"><input id="${id}" placeholder="${ph}"><button class="pri" data-a="addL" data-k="${k}" data-f="${id}">➕ إضافة</button></div>`;
+ M(`<h3>الأسماء والأسباب</h3>${blk('exp_names','الأسماء','اسم جديد','l_n')}${blk('exp_reasons','الأسباب','سبب جديد','l_r')}<button style="width:100%;margin-top:14px" data-a="x">إغلاق</button>`)}
+async function saveL(k,a){const{data,error}=await sb.from('settings').upsert({key:k,value:JSON.stringify(a)}).select();if(error||!data||!data.length)return toast('⚠️ لم يُحفظ! '+(error?error.message:''),1);await load();listsM();toast('تم الحفظ ✅')}
+A.lists=listsM;
+A.addL=d=>{const v=$('#'+d.f).value.trim();if(!v)return;const a=lst(d.k);if(a.includes(v))return toast('موجود مسبقاً',1);saveL(d.k,[...a,v])};
+A.delL=d=>{const a=lst(d.k);if(!confirm('حذف «'+a[d.i]+'» من القائمة؟ (المصروفات المسجلة لا تتأثر)'))return;a.splice(+d.i,1);saveL(d.k,a)};
 // ---- العرض
 const row=s=>{const st=status(s);return `<div class="row"><div class="av">${esc([...s.name.trim()][0]||'؟')}</div><div class="nm" data-a="prof" data-id="${s.id}"><div class="n">${esc(s.name)}${s.has_sibling?'<span class="sib">لديه أخ</span>':''}</div><div class="sub"><span class="b ${st[1]}">${st[0]}</span><span>هذا الشهر <b>${money(paidM(s))}</b></span><span>المتبقي <b>${money(remain(s))}</b></span></div></div>${acts(s)}</div>`};
 const kv=(a,b)=>`<div class="kv"><span>${a}</span><b>${b}</b></div>`;
@@ -111,33 +121,55 @@ A.mk=async()=>{const{data:{session}}=await sb.auth.getSession();
 // ---- التحميل (PDF / Word)
 const dstr=s=>allp(s).slice().sort((a,b)=>a.paid_on<b.paid_on?-1:1).map(p=>p.paid_on+' : '+money(p.amount)).join('\n');
 const COLS=[['name','الاسم',s=>s.name,4],['cls','الصف',cn,2],['g','ولي الأمر',s=>s.guardian_name||'',3],['ph','رقم التواصل',s=>s.phone||'',3],['fee','الرسوم الإجمالية',feeOf,2,1],['paid','إجمالي المدفوع',paidA,2,1],['rem','المتبقي',remain,2,1],['pm','مدفوع هذا الشهر',paidM,2,1],['log','سجل جميع الدفعات',dstr,5]];
-A.dl=d=>M(`<h3>تحميل الجدول</h3><h4>١) اختر الخانات التي تريدها في الجدول</h4><div class="cols">${COLS.map(c=>`<label><input type="checkbox" class="dk" value="${c[0]}" ${['name','ph','fee','paid','rem','log'].includes(c[0])?'checked':''}><span>${c[1]}</span></label>`).join('')}</div><h4>٢) اضغط على صيغة الملف لبدء التنزيل</h4><div class="bt"><button class="pri" data-a="doDl" data-f="pdf" data-t="${d.t}" data-id="${d.id||''}">📄 تنزيل PDF</button><button class="gold" data-a="doDl" data-f="docx" data-t="${d.t}" data-id="${d.id||''}">📝 تنزيل Word</button></div><button style="width:100%;margin-top:8px" data-a="x">إلغاء</button>`);
+const ECOLS=[['name','الاسم',e=>e.name,4],['cat','السبب',e=>e.category||'',3],['date','التاريخ',e=>e.spent_on,3],['amt','المبلغ',e=>e.amount,2,1]];
+const dlModal=(cols,act,def,d)=>M(`<h3>تحميل الجدول</h3><h4>١) اختر الخانات التي تريدها في الجدول</h4><div class="cols">${cols.map(c=>`<label><input type="checkbox" class="dk" value="${c[0]}" ${def.includes(c[0])?'checked':''}><span>${c[1]}</span></label>`).join('')}</div><h4>٢) اضغط على صيغة الملف لبدء التنزيل</h4><div class="bt"><button class="pri" data-a="${act}" data-f="pdf" data-t="${d.t||''}" data-id="${d.id||''}">📄 تنزيل PDF</button><button class="gold" data-a="${act}" data-f="docx" data-t="${d.t||''}" data-id="${d.id||''}">📝 تنزيل Word</button></div><button style="width:100%;margin-top:8px" data-a="x">إلغاء</button>`);
+A.dl=d=>dlModal(COLS,'doDl',['name','ph','fee','paid','rem','log'],d);
+A.dlE=d=>dlModal(ECOLS,'doDlE',['name','cat','date','amt'],d);
 const save=(b,n)=>{const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=n;a.click()};
-async function mkDocx(title,t,head,body,foot,cols,fn){const D=docx,w=[1.3,...cols.map(c=>c[3])],tot=w.reduce((a,b)=>a+b),W=w.map(x=>Math.round(x/tot*15600));
+const isLand=(head,cols)=>head.length>6||cols.some(c=>c[0]==='log');
+async function mkDocx(title,t,head,body,foot,cols,fn){const D=docx,land=isLand(head,cols),TW=land?15600:10600,w=[1.2,...cols.map(c=>c[3])],tot=w.reduce((a,b)=>a+b),W=w.map(x=>Math.round(x/tot*TW));
  const cell=(x,i,o)=>new D.TableCell({width:{size:W[i],type:D.WidthType.DXA},shading:o.f?{type:D.ShadingType.CLEAR,fill:o.f,color:'auto'}:undefined,verticalAlign:D.VerticalAlign.CENTER,margins:{top:70,bottom:70,left:90,right:90},children:String(x).split('\n').map(l=>new D.Paragraph({bidirectional:true,alignment:D.AlignmentType.CENTER,children:[new D.TextRun({text:l,bold:!!o.b,color:o.c,rightToLeft:true,font:'Arial',size:20})]}))});
  const R=(a,o)=>new D.TableRow({cantSplit:true,tableHeader:!!o.h,children:a.map((x,i)=>cell(x,i,o))});
- const tb=new D.Table({visuallyRightToLeft:true,layout:D.TableLayoutType.FIXED,columnWidths:W,width:{size:15600,type:D.WidthType.DXA},rows:[R(head,{h:1,b:1,f:'14506B',c:'FFFFFF'}),...body.map((r,i)=>R(r,{f:i%2?'F2F7FB':undefined})),R(foot,{b:1,f:'DDEBF7'})]});
+ const tb=new D.Table({visuallyRightToLeft:true,layout:D.TableLayoutType.FIXED,columnWidths:W,width:{size:TW,type:D.WidthType.DXA},rows:[R(head,{h:1,b:1,f:'14506B',c:'FFFFFF'}),...body.map((r,i)=>R(r,{f:i%2?'F2F7FB':undefined})),R(foot,{b:1,f:'DDEBF7'})]});
  const P=(x,sz,b)=>new D.Paragraph({bidirectional:true,alignment:D.AlignmentType.CENTER,spacing:{after:120},children:[new D.TextRun({text:x,bold:!!b,rightToLeft:true,font:'Arial',size:sz})]});
- const doc=new D.Document({sections:[{properties:{page:{size:{orientation:D.PageOrientation.LANDSCAPE},margin:{top:600,bottom:600,left:600,right:600}}},children:[P(title,34,1),P(t+'  —  '+today(),22),tb]}]});
+ const ft=new D.Footer({children:[new D.Paragraph({alignment:D.AlignmentType.CENTER,children:[new D.TextRun({children:['صفحة ',D.PageNumber.CURRENT,' من ',D.PageNumber.TOTAL_PAGES],font:'Arial',size:18})]})]});
+ const doc=new D.Document({sections:[{properties:{page:{size:{orientation:land?D.PageOrientation.LANDSCAPE:D.PageOrientation.PORTRAIT},margin:{top:600,bottom:700,left:600,right:600}}},footers:{default:ft},children:[P(title,34,1),P(t+'  —  '+today(),22),tb]}]});
  save(await D.Packer.toBlob(doc),fn+'.docx')}
-async function mkPdf(title,t,head,body,foot,cols,fn){if(!window.html2pdf)throw new Error('مكتبة PDF لم تُحمَّل، تحقق من الإنترنت');
- const w=[1.3,...cols.map(c=>c[3])],tot=w.reduce((a,b)=>a+b);
- const td=(x,i,st)=>`<td style="border:1px solid #9aa;padding:7px 6px;text-align:center;vertical-align:middle;width:${(w[i]/tot*100).toFixed(1)}%;${st||''}">${esc(x).replace(/\n/g,'<br>')}</td>`;
- const tr=(a,st)=>`<tr style="page-break-inside:avoid">${a.map((x,i)=>td(x,i,st)).join('')}</tr>`;
- const el=document.createElement('div');el.style.cssText='width:1080px;background:#fff;color:#000;direction:rtl;font-family:Tajawal,Tahoma,Arial,sans-serif;font-size:13px;padding:8px';
- el.innerHTML=`<h2 style="text-align:center;margin:0 0 6px">${esc(title)}</h2><p style="text-align:center;margin:0 0 12px">${esc(t)} — ${today()}</p><table style="width:100%;border-collapse:collapse;table-layout:fixed;direction:rtl"><thead>${tr(head,'background:#14506b;color:#fff;font-weight:bold')}</thead><tbody>${body.map((r,i)=>tr(r,i%2?'background:#f2f7fb':'')).join('')}${tr(foot,'background:#ddebf7;font-weight:bold')}</tbody></table>`;
- const wrap=document.createElement('div');wrap.style.cssText='position:fixed;left:-99999px;top:0';wrap.appendChild(el);document.body.appendChild(wrap);if(document.fonts&&document.fonts.ready)await document.fonts.ready;
- try{await html2pdf().set({margin:8,filename:fn+'.pdf',image:{type:'jpeg',quality:.95},html2canvas:{scale:2,useCORS:true,scrollX:0,scrollY:0,windowWidth:1100},jsPDF:{unit:'mm',format:'a4',orientation:'landscape'},pagebreak:{mode:['css','legacy']}}).from(el).save()}finally{wrap.remove()}}
-A.doDl=async d=>{const k=[...document.querySelectorAll('.dk:checked')].map(x=>x.value);if(!k.length)return toast('اختر خانة واحدة على الأقل',1);
- const fmt=d.f==='docx'?'docx':'pdf';let L,t;
- if(d.t==='class'){L=S.students.filter(s=>s.class_id==d.id);t='الصف: '+S.classes.find(c=>c.id==d.id).name}else if(d.t==='student'){L=S.students.filter(s=>s.id==d.id);t='الطالب: '+L[0].name}else{L=S.students.filter(unpaid);t='لم يدفعوا هذا الشهر'}
- if(!L.length)return toast('لا يوجد طلاب في هذه القائمة',1);
- const cols=COLS.filter(c=>k.includes(c[0])),head=['م',...cols.map(c=>c[1])];
- const body=L.map((s,i)=>[i+1,...cols.map(c=>c[4]?money(c[2](s)):c[2](s))]);
- const foot=['الإجمالي',...cols.map(c=>c[4]?money(L.reduce((a,s)=>a+Number(c[2](s)),0)):'')];
- const title=S.set.title||'مركز جودة التعليم',fn='students-'+today();
+// PDF: كل ورقة A4 مستقلة، بدون قصّ للصفوف، برقم الصفحة في الأسفل
+async function mkPdf(title,t,head,body,foot,cols,fn){if(!window.html2canvas||!(window.jspdf&&window.jspdf.jsPDF))throw new Error('مكتبة PDF لم تُحمَّل، تحقق من الإنترنت');
+ const land=isLand(head,cols),PW=land?1123:794,PH=land?794:1123,PAD=34,FOOT=36;
+ const w=[1.2,...cols.map(c=>c[3])],tot=w.reduce((a,b)=>a+b);
+ const cg='<colgroup>'+w.map(x=>`<col style="width:${(x/tot*100).toFixed(2)}%">`).join('')+'</colgroup>';
+ const cell=(x,i)=>{const c=i?cols[i-1]:null,v=String(x);return c&&c[0]==='log'?v.split('\n').filter(Boolean).map(p=>`<span class="pm">${esc(p)}</span>`).join(''):esc(v).replace(/\n/g,'<br>')};
+ const tr=(a,cls,th)=>`<tr class="${cls||''}">${a.map((x,i)=>th?`<th>${esc(x)}</th>`:`<td>${cell(x,i)}</td>`).join('')}</tr>`;
+ const top=`<div class="hd"><h2>${esc(title)}</h2><p>${esc(t)} — ${today()}</p></div>`;
+ const tbl=rows=>`<table>${cg}<thead>${tr(head,'',1)}</thead><tbody>${rows}</tbody></table>`;
+ const ov=document.createElement('div');ov.className='pdfov';ov.textContent='جاري تجهيز الملف...';document.body.appendChild(ov);
+ const ms=document.createElement('div');ms.className='pdfp';ms.style.cssText=`width:${PW}px;height:auto;padding:${PAD}px;left:-99999px;visibility:hidden;z-index:-1`;
+ ms.innerHTML=top+tbl(body.map((r,i)=>tr(r,i%2?'z':'')).join('')+tr(foot,'t'));document.body.appendChild(ms);
+ try{if(document.fonts&&document.fonts.ready)await document.fonts.ready;
+  const hs=[...ms.querySelectorAll('tbody tr')].map(r=>r.getBoundingClientRect().height+0.5),fh=hs.pop(),thH=ms.querySelector('thead tr').getBoundingClientRect().height,hdH=ms.querySelector('.hd').offsetHeight;
+  const avail=PH-2*PAD-FOOT-thH-4,pages=[];let cur=[],used=hdH;
+  hs.forEach((h,i)=>{if(cur.length&&used+h>avail){pages.push(cur);cur=[];used=0}cur.push(i);used+=h});
+  if(used+fh>avail){if(cur.length>1){const l=cur.pop();pages.push(cur);cur=[l]}else{pages.push(cur);cur=[]}}
+  pages.push(cur);
+  const pdf=new window.jspdf.jsPDF({orientation:land?'landscape':'portrait',unit:'mm',format:'a4',compress:true});
+  for(let n=0;n<pages.length;n++){const last=n===pages.length-1,el=document.createElement('div');el.className='pdfp';el.style.cssText=`width:${PW}px;height:${PH}px;padding:${PAD}px`;
+   el.innerHTML=(n===0?top:'')+tbl(pages[n].map(i=>tr(body[i],i%2?'z':'')).join('')+(last?tr(foot,'t'):''))+`<div class="pf">${esc(title)} — صفحة ${n+1} من ${pages.length}</div>`;
+   document.body.appendChild(el);
+   const cv=await html2canvas(el,{scale:2,backgroundColor:'#ffffff',scrollX:0,scrollY:0,windowWidth:PW,windowHeight:PH});el.remove();
+   if(n)pdf.addPage('a4',land?'landscape':'portrait');pdf.addImage(cv.toDataURL('image/jpeg',0.95),'JPEG',0,0,land?297:210,land?210:297)}
+  pdf.save(fn+'.pdf')}finally{ms.remove();ov.remove()}}
+async function runExport(fmt,t,L,cols){const head=['م',...cols.map(c=>c[1])],body=L.map((s,i)=>[i+1,...cols.map(c=>c[4]?money(c[2](s)):c[2](s))]),foot=['الإجمالي',...cols.map(c=>c[4]?money(L.reduce((a,s)=>a+Number(c[2](s)),0)):'')];
+ const title=S.set.title||'مركز جودة التعليم',fn=(S.view==='exp'?'expenses-':'students-')+today();
  try{toast('جاري تجهيز الملف...');if(fmt==='docx')await mkDocx(title,t,head,body,foot,cols,fn);else await mkPdf(title,t,head,body,foot,cols,fn);closeM()}
- catch(e){toast('تعذر إنشاء الملف: '+e.message,1)}};
+ catch(e){toast('تعذر إنشاء الملف: '+e.message,1)}}
+const picked=()=>[...document.querySelectorAll('.dk:checked')].map(x=>x.value);
+A.doDl=d=>{const k=picked();if(!k.length)return toast('اختر خانة واحدة على الأقل',1);let L,t;
+ if(d.t==='class'){L=S.students.filter(s=>s.class_id==d.id);t='الصف: '+S.classes.find(c=>c.id==d.id).name}else if(d.t==='student'){L=S.students.filter(s=>s.id==d.id);t='الطالب: '+L[0].name}else{L=S.students.filter(unpaid);t='لم يدفعوا هذا الشهر'}
+ if(!L.length)return toast('لا يوجد طلاب في هذه القائمة',1);runExport(d.f==='docx'?'docx':'pdf',t,L,COLS.filter(c=>k.includes(c[0])))};
+A.doDlE=d=>{const k=picked();if(!k.length)return toast('اختر خانة واحدة على الأقل',1);const L=expFilt().slice().sort((a,b)=>a.spent_on<b.spent_on?-1:1);if(!L.length)return toast('لا توجد مصروفات',1);
+ runExport(d.f==='docx'?'docx':'pdf','المصروفات: '+S.ey+' — '+(S.em==='00'?'كل الأشهر':MN[+S.em-1])+(S.ec?' — '+S.ec:''),L,ECOLS.filter(c=>k.includes(c[0])))};
 // ---- الأحداث
 document.addEventListener('click',e=>{if(e.target.id==='modal')return closeM();const t=e.target.closest('[data-a]');if(t&&A[t.dataset.a])A[t.dataset.a](t.dataset)});
 document.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.id==='p')A.login()});

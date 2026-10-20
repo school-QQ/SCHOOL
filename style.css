@@ -58,3 +58,13 @@ button{cursor:pointer;border:1.5px solid var(--line);background:#fff;border-radi
 .sumbar{display:flex;justify-content:space-between;align-items:center;background:var(--p);color:#fff;border-radius:16px;padding:14px 16px;margin-bottom:12px;font-weight:500}.sumbar b{font-size:22px;font-weight:800}
 .pg{padding:2px 0}.pl{padding:4px 0}.pl b{font-weight:800}.fin{margin-top:10px;padding-top:10px;border-top:1px dashed var(--line)}
 .cat{background:var(--soft);color:var(--p)}#ec{margin:0 0 10px}
+/* القوائم + صفحات PDF */
+.addl{display:flex;gap:8px;align-items:flex-start;margin-top:8px}.addl input{margin:0}
+.pdfov{position:fixed;inset:0;background:#fff;z-index:9998;display:grid;place-items:center;font-size:20px;font-weight:700;color:var(--p)}
+.pdfp{position:fixed;left:0;top:0;z-index:9997;background:#fff;color:#000;direction:rtl;font-family:Tajawal,Tahoma,Arial,sans-serif;display:flex;flex-direction:column}
+.pdfp .hd{padding-bottom:12px;text-align:center}.pdfp .hd h2{margin:0 0 4px;font-size:26px;color:#0f4c5c}.pdfp .hd p{margin:0;font-size:14px;color:#444}
+.pdfp table{width:100%;border-collapse:collapse;table-layout:fixed}
+.pdfp th,.pdfp td{border:1px solid #9fb0bb;padding:8px 6px;text-align:center;vertical-align:middle;font-size:13.5px;line-height:1.5;overflow-wrap:anywhere}
+.pdfp th{background:#0f4c5c;color:#fff;font-weight:700}.pdfp tr.z td{background:#f2f7fb}.pdfp tr.t td{background:#dde9f3;font-weight:800}
+.pdfp .pm{display:inline-block;white-space:nowrap;margin:1px 4px;background:#eef4f7;border-radius:6px;padding:0 6px}
+.pdfp .pf{margin-top:auto;text-align:center;font-size:13px;color:#555;border-top:1px solid #ccd;padding-top:7px}
