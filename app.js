@@ -1,7 +1,7 @@
 const C=window.CFG,sb=supabase.createClient(C.SUPABASE_URL,C.SUPABASE_ANON_KEY);
 const $=s=>document.querySelector(s);
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const S={classes:[],students:[],pays:[],set:{},open:{},openU:{},flt:'all',me:null};let ASK=null;const A={};
+const S={classes:[],students:[],pays:[],set:{},open:{},openU:{},view:"home",exp:[],expErr:false,ey:String(new Date().getFullYear()),em:String(new Date().getMonth()+1).padStart(2,"0"),eo:{},ec:"",flt:'all',me:null};let ASK=null;const A={};
 const ym=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')};
 const today=()=>{const d=new Date();return ym()+'-'+String(d.getDate()).padStart(2,'0')};
 const toast=(m,bad)=>{const t=$('#toast');t.textContent=m;t.className=bad?'bad show':'show';setTimeout(()=>t.className='',3500)};
@@ -35,12 +35,38 @@ async function boot(){const{data:{session}}=await sb.auth.getSession();if(!sessi
  const{data:p,error}=await sb.from('profiles').select('*').eq('id',session.user.id).maybeSingle();
  if(error||!p){await sb.auth.signOut();return loginView('هذا الحساب غير مفعّل في النظام')}
  S.me=p;if(p.must_change)return passView();
- $('#bar').hidden=false;$('#admb').hidden=p.role!=='admin';
- $('#main').innerHTML=`<div class="tools"><input id="q" placeholder="ابحث عن طالب..." oninput="render()"><div class="chips"><button class="chip" data-a="flt" data-k="all">الكل</button><button class="chip" data-a="flt" data-k="sib">لديه أخ</button><button class="chip" data-a="flt" data-k="unp">لم يدفعوا هذا الشهر</button></div></div><div id="list"></div>`;
- await load()}
+ S.view='home';await load()}
 async function load(){const R=await Promise.all([sb.from('classes').select('*').order('sort'),sb.from('students').select('*').order('name'),sb.from('payments').select('*').order('paid_on',{ascending:false}),sb.from('settings').select('*')]);
  const e=R.map(r=>r.error).find(Boolean);if(e)return toast('خطأ في تحميل البيانات: '+e.message,1);
- S.classes=R[0].data;S.students=R[1].data;S.pays=R[2].data;S.set=Object.fromEntries(R[3].data.map(r=>[r.key,r.value]));render()}
+ S.classes=R[0].data;S.students=R[1].data;S.pays=R[2].data;S.set=Object.fromEntries(R[3].data.map(r=>[r.key,r.value]));const X=await sb.from('expenses').select('*').order('spent_on',{ascending:false});S.expErr=!!X.error;S.exp=X.error?[]:X.data;refresh()}
+// ---- التنقل: الرئيسية / الطلاب / المصروفات
+const STU_HTML=`<div class="tools"><input id="q" placeholder="ابحث عن طالب..." oninput="render()"><div class="chips"><button class="chip" data-a="flt" data-k="all">الكل</button><button class="chip" data-a="flt" data-k="sib">لديه أخ</button><button class="chip" data-a="flt" data-k="unp">لم يدفعوا هذا الشهر</button></div></div><div id="list"></div>`;
+const cats=()=>[...new Set(S.exp.map(e=>e.category).filter(Boolean))].sort();
+const MN=['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
+function refresh(){const v=S.view;$('#bar').hidden=false;$('#homeb').hidden=v==='home';$('#addb').hidden=v!=='students';$('#admb').hidden=!S.me||S.me.role!=='admin';
+ if(v==='students'){if(!$('#list'))$('#main').innerHTML=STU_HTML;render()}else if(v==='exp')expView();else homeView()}
+function go(v){S.view=v;$('#main').innerHTML='';refresh()}
+A.go=d=>go(d.v);A.home=()=>go('home');
+function homeView(){const m=ym(),tm=S.exp.filter(e=>e.spent_on.startsWith(m)).reduce((a,e)=>a+Number(e.amount),0);
+ $('#main').innerHTML=`<div class="tiles"><button class="tile" data-a="go" data-v="students"><span class="ti">🎓</span>الطلاب<small>${S.students.length} طالب</small></button><button class="tile" data-a="go" data-v="exp"><span class="ti">🧾</span>المصروفات<small>هذا الشهر: ${money(tm)}</small></button></div>`}
+function expView(){if(S.expErr){$('#main').innerHTML='<div class="card"><div class="det"><p>جدول المصروفات غير مُنشأ بعد. شغّل ملف step3-expenses.sql في Supabase (SQL Editor) ثم حدّث الصفحة.</p></div></div>';return}
+ const years=[...new Set([String(new Date().getFullYear()),S.ey,...S.exp.map(e=>e.spent_on.slice(0,4))])].sort().reverse();
+ $('#main').innerHTML=`<div class="tools"><div class="fl"><select id="ey">${years.map(y=>`<option ${y===S.ey?'selected':''}>${y}</option>`).join('')}</select><select id="em"><option value="00">كل الأشهر</option>${MN.map((n,i)=>{const v=String(i+1).padStart(2,'0');return `<option value="${v}" ${v===S.em?'selected':''}>${n}</option>`}).join('')}</select></div><select id="ec"><option value="">كل الأسباب</option>${cats().map(c=>`<option ${c===S.ec?'selected':''}>${esc(c)}</option>`).join('')}</select><button class="pri" style="width:100%" data-a="newE">➕ إضافة مصروف</button></div><div id="elist"></div>`;
+ $('#ey').onchange=e=>{S.ey=e.target.value;expList()};$('#em').onchange=e=>{S.em=e.target.value;expList()};$('#ec').onchange=e=>{S.ec=e.target.value;expList()};expList()}
+function expList(){const L=S.exp.filter(e=>e.spent_on.slice(0,4)===S.ey&&(S.em==='00'||e.spent_on.slice(5,7)===S.em)&&(!S.ec||e.category===S.ec)),G={};
+ L.forEach(e=>{const k=e.spent_on.slice(0,7);(G[k]=G[k]||[]).push(e)});
+ const tot=L.reduce((a,e)=>a+Number(e.amount),0);
+ let h=`<div class="sumbar"><span>إجمالي المصروفات (${L.length})</span><b>${money(tot)}</b></div>`;
+ h+=Object.keys(G).map(k=>{const op=(k in S.eo)?S.eo[k]:S.em!=='00',T=G[k].reduce((a,e)=>a+Number(e.amount),0);
+  return `<section class="cls"><div class="ch"><button class="ct" data-a="togE" data-k="${k}">${op?'▾':'▸'} 📅 ${MN[+k.slice(5)-1]} ${k.slice(0,4)} <b>${money(T)}</b></button></div>${op?G[k].map(e=>`<div class="row"><div class="av">🧾</div><div class="nm"><div class="n">${esc(e.name)}</div><div class="sub">${e.category?`<span class="b cat">${esc(e.category)}</span>`:''}<span>${e.spent_on}</span></div></div><div class="amt">${money(e.amount)}</div><button class="ib" data-a="editE" data-id="${e.id}" title="تعديل">${IC.ed}</button></div>`).join(''):''}</section>`}).join('')||'<p class="empty">لا توجد مصروفات في هذه الفترة</p>';
+ $('#elist').innerHTML=h}
+A.togE=d=>{const op=(d.k in S.eo)?S.eo[d.k]:S.em!=='00';S.eo[d.k]=!op;expList()};
+function expForm(e){e=e||{};M(`<h3>${e.id?'تعديل مصروف':'مصروف جديد'}</h3>${F('x_n','اسم المصروف',e.name)}<label>سبب المصروف (مثال: أكل، رواتب، مكافآت)<input id="x_c" list="cats" value="${esc(e.category||'')}"><datalist id="cats">${cats().map(c=>`<option value="${esc(c)}">`).join('')}</datalist></label>${F('x_a','المبلغ',e.amount,'number')}${F('x_d','التاريخ',e.spent_on||today(),'date')}<div class="bt"><button class="pri" data-a="saveE" data-id="${e.id||''}">💾 حفظ</button><button data-a="x">إلغاء</button></div>${e.id?`<button class="dn" data-a="delE" data-id="${e.id}">🗑 حذف المصروف</button>`:''}`)}
+A.newE=()=>expForm();A.editE=d=>expForm(S.exp.find(x=>x.id==d.id));
+A.saveE=d=>{const r={name:$('#x_n').value.trim(),category:$('#x_c').value.trim(),amount:+$('#x_a').value,spent_on:$('#x_d').value};if(!r.name||!r.category||!(r.amount>0)||!r.spent_on)return toast('اكتب الاسم والسبب والمبلغ والتاريخ',1);
+ S.ey=r.spent_on.slice(0,4);S.em=r.spent_on.slice(5,7);S.eo[r.spent_on.slice(0,7)]=true;
+ return db(d.id?sb.from('expenses').update(r).eq('id',d.id):sb.from('expenses').insert(r),'تم حفظ المصروف ✅')};
+A.delE=d=>{if(confirm('حذف هذا المصروف؟'))db(sb.from('expenses').delete().eq('id',d.id),'تم الحذف')};
 // ---- العرض
 const row=s=>{const st=status(s);return `<div class="row"><div class="av">${esc([...s.name.trim()][0]||'؟')}</div><div class="nm" data-a="prof" data-id="${s.id}"><div class="n">${esc(s.name)}${s.has_sibling?'<span class="sib">لديه أخ</span>':''}</div><div class="sub"><span class="b ${st[1]}">${st[0]}</span><span>هذا الشهر <b>${money(paidM(s))}</b></span><span>المتبقي <b>${money(remain(s))}</b></span></div></div>${acts(s)}</div>`};
 const kv=(a,b)=>`<div class="kv"><span>${a}</span><b>${b}</b></div>`;
@@ -70,7 +96,7 @@ A.saveS=d=>{const r={name:$('#f_n').value.trim(),class_id:+$('#f_c').value,guard
  return db(d.id?sb.from('students').update(r).eq('id',d.id):sb.from('students').insert(r))};
 A.delS=d=>{if(confirm('سيُحذف الطالب وكل مدفوعاته نهائياً. متأكد؟'))db(sb.from('students').delete().eq('id',d.id),'تم الحذف')};
 function prof(id){const s=S.students.find(x=>x.id==id);if(!s)return;const P=S.pays.filter(p=>p.student_id==id),st=status(s);
- M(`<h3>${esc(s.name)} <span class="b ${st[1]}">${st[0]}</span></h3>الصف: ${esc(cn(s))}<br>ولي الأمر: ${esc(s.guardian_name||'-')}<br>الجوال: ${esc(s.phone||'-')}<br>لديه أخ: ${s.has_sibling?'✔️ نعم':'لا'}<br>الرسوم الإجمالية: ${money(feeOf(s))}<br>إجمالي المدفوع: ${money(paidA(s))}<br>مدفوع هذا الشهر: ${money(paidM(s))}<br>المتبقي: <b>${money(remain(s))}</b>${acts(s)}<h4>المدفوعات</h4>${P.map(p=>`<div class="py"><span>${p.paid_on}</span><b>${p.amount}</b><button data-a="delP" data-id="${p.id}" data-s="${id}">✖</button></div>`).join('')||'<p class="empty">لا توجد مدفوعات</p>'}<h4>تسجيل دفعة</h4>${F('p_a','المبلغ','','number')}${F('p_d','تاريخ الإيداع',today(),'date')}<div class="bt"><button class="pri" data-a="addP" data-id="${id}">➕ تسجيل</button><button data-a="dl" data-t="student" data-id="${id}">⬇️ تحميل</button><button data-a="x">إغلاق</button></div>`)}
+ M(`<h3>${esc(s.name)} <span class="b ${st[1]}">${st[0]}</span></h3><div class="pg"><div class="pl">الصف: ${esc(cn(s))}</div><div class="pl">ولي الأمر: ${esc(s.guardian_name||'-')}</div><div class="pl">الجوال: ${esc(s.phone||'-')}</div><div class="pl">لديه أخ: ${s.has_sibling?'نعم':'لا'}</div></div><div class="pg fin"><div class="pl">الرسوم الإجمالية: <b>${money(feeOf(s))}</b></div><div class="pl">إجمالي المدفوع: <b>${money(paidA(s))}</b></div><div class="pl">مدفوع هذا الشهر: <b>${money(paidM(s))}</b></div><div class="pl">المتبقي: <b>${money(remain(s))}</b></div></div>${acts(s)}<h4>المدفوعات</h4>${P.map(p=>`<div class="py"><span>${p.paid_on}</span><b>${p.amount}</b><button data-a="delP" data-id="${p.id}" data-s="${id}">✖</button></div>`).join('')||'<p class="empty">لا توجد مدفوعات</p>'}<h4>تسجيل دفعة</h4>${F('p_a','المبلغ','','number')}${F('p_d','تاريخ الإيداع',today(),'date')}<div class="bt"><button class="pri" data-a="addP" data-id="${id}">➕ تسجيل</button><button data-a="dl" data-t="student" data-id="${id}">⬇️ تحميل</button><button data-a="x">إغلاق</button></div>`)}
 A.prof=d=>prof(d.id);
 A.addP=async d=>{const a=+$('#p_a').value,dt=$('#p_d').value;if(!(a>0)||!dt)return toast('اكتب المبلغ والتاريخ',1);
  const{data,error}=await sb.from('payments').insert({student_id:+d.id,amount:a,paid_on:dt}).select();

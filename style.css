@@ -49,3 +49,12 @@ button{cursor:pointer;border:1.5px solid var(--line);background:#fff;border-radi
 #toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:var(--p);color:#fff;padding:11px 18px;border-radius:14px;opacity:0;pointer-events:none;transition:.3s;z-index:30;max-width:90%;box-shadow:0 6px 20px #0003}
 #toast.show{opacity:1}#toast.bad{background:var(--er)}
 @media(max-width:380px){.av{display:none}}
+/* الرئيسية والمصروفات والملف الشخصي */
+.tiles{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:8px}
+.tile{aspect-ratio:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;border:0;border-radius:22px;background:#fff;box-shadow:0 4px 16px #1c2b3614;font-size:22px;font-weight:800;color:var(--p);padding:12px;border-bottom:4px solid var(--gold)}
+.tile .ti{font-size:46px}.tile small{font-size:14px;color:var(--mut);font-weight:500}.tile:active{transform:scale(.98)}
+.fl{display:flex;gap:8px}.fl select{margin:0 0 10px}
+.amt{font-weight:800;color:var(--p);font-size:17px;white-space:nowrap}
+.sumbar{display:flex;justify-content:space-between;align-items:center;background:var(--p);color:#fff;border-radius:16px;padding:14px 16px;margin-bottom:12px;font-weight:500}.sumbar b{font-size:22px;font-weight:800}
+.pg{padding:2px 0}.pl{padding:4px 0}.pl b{font-weight:800}.fin{margin-top:10px;padding-top:10px;border-top:1px dashed var(--line)}
+.cat{background:var(--soft);color:var(--p)}#ec{margin:0 0 10px}
