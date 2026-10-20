@@ -1,7 +1,7 @@
 const C=window.CFG,sb=supabase.createClient(C.SUPABASE_URL,C.SUPABASE_ANON_KEY);
 const $=s=>document.querySelector(s);
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const S={classes:[],students:[],pays:[],set:{},open:{},openU:{},view:"home",exp:[],expErr:false,ey:String(new Date().getFullYear()),em:String(new Date().getMonth()+1).padStart(2,"0"),eo:{},ec:"",flt:'all',me:null};let ASK=null;const A={};
+const S={classes:[],students:[],pays:[],set:{},open:{},openU:{},view:"home",exp:[],expErr:false,ey:String(new Date().getFullYear()),em:String(new Date().getMonth()+1).padStart(2,"0"),eo:{},ec:"",ty:"",tm:"",flt:'all',me:null};let ASK=null;const A={};
 const ym=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')};
 const today=()=>{const d=new Date();return ym()+'-'+String(d.getDate()).padStart(2,'0')};
 const toast=(m,bad)=>{const t=$('#toast');t.textContent=m;t.className=bad?'bad show':'show';setTimeout(()=>t.className='',3500)};
@@ -43,13 +43,16 @@ async function load(){const R=await Promise.all([sb.from('classes').select('*').
 const STU_HTML=`<div class="tools"><input id="q" placeholder="ابحث عن طالب..." oninput="render()"><div class="chips"><button class="chip" data-a="flt" data-k="all">الكل</button><button class="chip" data-a="flt" data-k="unp">لم يدفعوا هذا الشهر</button></div></div><div id="list"></div>`;
 const MN=['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
 function refresh(){const v=S.view;$('#bar').hidden=false;$('#homeb').hidden=v==='home';$('#addb').hidden=v!=='students';$('#admb').hidden=!S.me||S.me.role!=='admin';
- if(v==='students'){if(!$('#list'))$('#main').innerHTML=STU_HTML;render()}else if(v==='exp')expView();else homeView()}
+ if(v==='students'){if(!$('#list'))$('#main').innerHTML=STU_HTML;render()}else if(v==='exp')expView();else if(v==='tot')totView();else homeView()}
 function go(v){S.view=v;$('#main').innerHTML='';refresh()}
 A.go=d=>go(d.v);A.home=()=>go('home');
-function homeView(){const m=ym(),tm=S.exp.filter(e=>e.spent_on.startsWith(m)).reduce((a,e)=>a+Number(e.amount),0);
- $('#main').innerHTML=`<div class="tiles"><button class="tile" data-a="go" data-v="students"><span class="ti">🎓</span>الطلاب<small>${S.students.length} طالب</small></button><button class="tile" data-a="go" data-v="exp"><span class="ti">🧾</span>المصروفات<small>هذا الشهر: ${money(tm)}</small></button></div>`}
-const lst=k=>{try{const a=JSON.parse(S.set[k]||'[]');return Array.isArray(a)?a:[]}catch(e){return[]}};
-const expFilt=()=>S.exp.filter(e=>e.spent_on.slice(0,4)===S.ey&&(S.em==='00'||e.spent_on.slice(5,7)===S.em)&&(!S.ec||e.category===S.ec));
+function homeView(){const m=ym(),tm=sum(S.exp.filter(e=>e.spent_on.startsWith(m))),net=sum(S.pays)-sum(S.exp);
+ $('#main').innerHTML=`<div class="tiles"><button class="tile" data-a="go" data-v="students"><span class="ti">🎓</span>الطلاب<small>${S.students.length} طالب</small></button><button class="tile" data-a="go" data-v="exp"><span class="ti">🧾</span>المصروفات<small>هذا الشهر: ${money(tm)}</small></button><button class="tile wide" data-a="go" data-v="tot"><span class="ti">💰</span>الإجمالي<small>الصافي بعد المصروفات: <b class="${net<0?'negt':''}">${money(net)}</b></small></button></div>`}
+function totView(){const ys=[...new Set([...S.pays.map(p=>p.paid_on.slice(0,4)),...S.exp.map(e=>e.spent_on.slice(0,4))])].sort().reverse();
+ const f=d=>(!S.ty||d.slice(0,4)===S.ty)&&(!S.tm||d.slice(5,7)===S.tm);
+ const P=S.pays.filter(p=>f(p.paid_on)),E=S.exp.filter(e=>f(e.spent_on)),pi=sum(P),ex=sum(E),net=pi-ex;
+ $('#main').innerHTML=`<div class="tools"><div class="fl"><select id="ty"><option value="">كل السنوات</option>${ys.map(y=>`<option ${y===S.ty?'selected':''}>${y}</option>`).join('')}</select><select id="tm"><option value="">كل الأشهر</option>${MN.map((n,i)=>{const v=String(i+1).padStart(2,'0');return `<option value="${v}" ${v===S.tm?'selected':''}>${n}</option>`}).join('')}</select></div></div><div class="tot"><div class="tl"><span>إجمالي المدفوعات من الطلاب (${P.length} دفعة)</span><b>${money(pi)}</b></div><div class="tl"><span>إجمالي المصروفات (${E.length})</span><b>− ${money(ex)}</b></div><div class="tl net ${net<0?'neg':''}"><span>الإجمالي بعد خصم المصروفات</span><b>${money(net)}</b></div></div><p class="note">الإجمالي = المدفوعات − المصروفات</p>`;
+ $('#ty').onchange=e=>{S.ty=e.target.value;totView()};$('#tm').onchange=e=>{S.tm=e.target.value;totView()}}
 function expView(){if(S.expErr){$('#main').innerHTML='<div class="card"><div class="det"><p>جدول المصروفات غير مُنشأ بعد. شغّل ملف step3-expenses.sql في Supabase (SQL Editor) ثم حدّث الصفحة.</p></div></div>';return}
  if(S.ec&&!lst('exp_reasons').includes(S.ec))S.ec='';
  const years=[...new Set([String(new Date().getFullYear()),S.ey,...S.exp.map(e=>e.spent_on.slice(0,4))])].sort().reverse();
@@ -135,31 +138,33 @@ async function mkDocx(title,t,head,body,foot,cols,fn){const D=docx,land=isLand(h
  const ft=new D.Footer({children:[new D.Paragraph({alignment:D.AlignmentType.CENTER,children:[new D.TextRun({children:['صفحة ',D.PageNumber.CURRENT,' من ',D.PageNumber.TOTAL_PAGES],font:'Arial',size:18})]})]});
  const doc=new D.Document({sections:[{properties:{page:{size:{orientation:land?D.PageOrientation.LANDSCAPE:D.PageOrientation.PORTRAIT},margin:{top:600,bottom:700,left:600,right:600}}},footers:{default:ft},children:[P(title,34,1),P(t+'  —  '+today(),22),tb]}]});
  save(await D.Packer.toBlob(doc),fn+'.docx')}
-// PDF: كل ورقة A4 مستقلة، بدون قصّ للصفوف، برقم الصفحة في الأسفل
-async function mkPdf(title,t,head,body,foot,cols,fn){if(!window.html2canvas||!(window.jspdf&&window.jspdf.jsPDF))throw new Error('مكتبة PDF لم تُحمَّل، تحقق من الإنترنت');
- const land=isLand(head,cols),PW=land?1123:794,PH=land?794:1123,PAD=34,FOOT=36;
- const w=[1.2,...cols.map(c=>c[3])],tot=w.reduce((a,b)=>a+b);
- const cg='<colgroup>'+w.map(x=>`<col style="width:${(x/tot*100).toFixed(2)}%">`).join('')+'</colgroup>';
- const cell=(x,i)=>{const c=i?cols[i-1]:null,v=String(x);return c&&c[0]==='log'?v.split('\n').filter(Boolean).map(p=>`<span class="pm">${esc(p)}</span>`).join(''):esc(v).replace(/\n/g,'<br>')};
- const tr=(a,cls,th)=>`<tr class="${cls||''}">${a.map((x,i)=>th?`<th>${esc(x)}</th>`:`<td>${cell(x,i)}</td>`).join('')}</tr>`;
- const top=`<div class="hd"><h2>${esc(title)}</h2><p>${esc(t)} — ${today()}</p></div>`;
- const tbl=rows=>`<table>${cg}<thead>${tr(head,'',1)}</thead><tbody>${rows}</tbody></table>`;
- const ov=document.createElement('div');ov.className='pdfov';ov.textContent='جاري تجهيز الملف...';document.body.appendChild(ov);
- const ms=document.createElement('div');ms.className='pdfp';ms.style.cssText=`width:${PW}px;height:auto;padding:${PAD}px;left:-99999px;visibility:hidden;z-index:-1`;
- ms.innerHTML=top+tbl(body.map((r,i)=>tr(r,i%2?'z':'')).join('')+tr(foot,'t'));document.body.appendChild(ms);
- try{if(document.fonts&&document.fonts.ready)await document.fonts.ready;
-  const hs=[...ms.querySelectorAll('tbody tr')].map(r=>r.getBoundingClientRect().height+0.5),fh=hs.pop(),thH=ms.querySelector('thead tr').getBoundingClientRect().height,hdH=ms.querySelector('.hd').offsetHeight;
-  const avail=PH-2*PAD-FOOT-thH-4,pages=[];let cur=[],used=hdH;
-  hs.forEach((h,i)=>{if(cur.length&&used+h>avail){pages.push(cur);cur=[];used=0}cur.push(i);used+=h});
-  if(used+fh>avail){if(cur.length>1){const l=cur.pop();pages.push(cur);cur=[l]}else{pages.push(cur);cur=[]}}
-  pages.push(cur);
-  const pdf=new window.jspdf.jsPDF({orientation:land?'landscape':'portrait',unit:'mm',format:'a4',compress:true});
-  for(let n=0;n<pages.length;n++){const last=n===pages.length-1,el=document.createElement('div');el.className='pdfp';el.style.cssText=`width:${PW}px;height:${PH}px;padding:${PAD}px`;
-   el.innerHTML=(n===0?top:'')+tbl(pages[n].map(i=>tr(body[i],i%2?'z':'')).join('')+(last?tr(foot,'t'):''))+`<div class="pf">${esc(title)} — صفحة ${n+1} من ${pages.length}</div>`;
-   document.body.appendChild(el);
-   const cv=await html2canvas(el,{scale:2,backgroundColor:'#ffffff',scrollX:0,scrollY:0,windowWidth:PW,windowHeight:PH});el.remove();
-   if(n)pdf.addPage('a4',land?'landscape':'portrait');pdf.addImage(cv.toDataURL('image/jpeg',0.95),'JPEG',0,0,land?297:210,land?210:297)}
-  pdf.save(fn+'.pdf')}finally{ms.remove();ov.remove()}}
+// PDF: رسم مباشر على canvas بالخط العربي — كل ورقة A4 مستقلة وفيها رقم الصفحة
+async function mkPdf(title,t,head,body,foot,cols,fn){if(!(window.jspdf&&window.jspdf.jsPDF))throw new Error('مكتبة PDF لم تُحمَّل، تحقق من الإنترنت');
+ const land=isLand(head,cols),PW=land?1123:794,PH=land?794:1123,K=2,M=34,FT=30,FS=14,LH=21,PY=9,PX=8,FF='Tajawal,Tahoma,Arial,sans-serif';
+ try{await document.fonts.load('400 16px Tajawal');await document.fonts.load('700 16px Tajawal');await document.fonts.load('800 16px Tajawal')}catch(e){}
+ const w=[1.2,...cols.map(c=>c[3])],tt=w.reduce((a,b)=>a+b),cw=w.map(x=>x/tt*(PW-2*M)),cx=[];let xx=PW-M;cw.forEach(v=>{xx-=v;cx.push(xx)});
+ const mk=()=>{const c=document.createElement('canvas');c.width=PW*K;c.height=PH*K;const g=c.getContext('2d');g.scale(K,K);g.textBaseline='middle';return[c,g]};
+ const mg=mk()[1],isAr=x=>/[\u0600-\u06FF]/.test(x);
+ const wrapT=(g,txt,mw)=>{const out=[];String(txt).split('\n').forEach(par=>{let line='';par.split(' ').forEach(wd=>{const ts=line?line+' '+wd:wd;if(!line||g.measureText(ts).width<=mw)line=ts;else{out.push(line);line=wd}});out.push(line)});
+  return out.flatMap(l=>{if(g.measureText(l).width<=mw)return[l];const r=[];let c='';for(const ch of l){if(c&&g.measureText(c+ch).width>mw){r.push(c);c=ch}else c+=ch}r.push(c);return r})};
+ const packL=(g,txt,mw)=>{const out=[];let line='';String(txt).split('\n').filter(Boolean).forEach(it=>{const ts=line?line+'   •   '+it:it;if(!line||g.measureText(ts).width<=mw)line=ts;else{out.push(line);line=it}});if(line)out.push(line);return out.length?out:['']};
+ const lay=(row,bold,g)=>{g.font=`${bold?700:400} ${FS}px ${FF}`;const L=row.map((x,i)=>{const mw=cw[i]-2*PX,c=i?cols[i-1]:null;return c&&c[0]==='log'&&!bold?packL(g,x,mw):wrapT(g,x,mw)});return{L,h:Math.max(...L.map(l=>l.length))*LH+2*PY}};
+ const H=lay(head,true,mg),B=body.map(r=>lay(r,false,mg)),Fo=lay(foot,true,mg);
+ const HD=66,avail=PH-2*M-FT-H.h,pages=[];let cur=[],used=HD;
+ B.forEach((b,i)=>{if(cur.length&&used+b.h>avail){pages.push(cur);cur=[];used=0}cur.push(i);used+=b.h});
+ if(used+Fo.h>avail){if(cur.length>1){const l=cur.pop();pages.push(cur);cur=[l]}else{pages.push(cur);cur=[]}}
+ pages.push(cur);
+ const draw=(g,R,y,bg,fg,bold)=>{R.L.forEach((ls,i)=>{g.fillStyle=bg;g.fillRect(cx[i],y,cw[i],R.h);g.strokeStyle='#9fb0bb';g.lineWidth=1;g.strokeRect(cx[i]+.5,y+.5,cw[i]-1,R.h-1);g.fillStyle=fg;g.font=`${bold?700:400} ${FS}px ${FF}`;g.textAlign='center';const y0=y+(R.h-ls.length*LH)/2+LH/2;ls.forEach((l,j)=>{g.direction=isAr(l)?'rtl':'ltr';g.fillText(l,cx[i]+cw[i]/2,y0+j*LH)})})};
+ const pdf=new window.jspdf.jsPDF({orientation:land?'landscape':'portrait',unit:'mm',format:'a4',compress:true});
+ pages.forEach((pg,n)=>{const[c,g]=mk();g.fillStyle='#fff';g.fillRect(0,0,PW,PH);let y=M;
+  if(n===0){g.direction='rtl';g.textAlign='center';g.fillStyle='#0f4c5c';g.font=`800 26px ${FF}`;g.fillText(title,PW/2,y+16);g.fillStyle='#444';g.font=`400 14px ${FF}`;g.fillText(t+' — '+today(),PW/2,y+46);y+=HD}
+  draw(g,H,y,'#0f4c5c','#ffffff',1);y+=H.h;
+  pg.forEach(i=>{draw(g,B[i],y,i%2?'#f2f7fb':'#ffffff','#111111',0);y+=B[i].h});
+  if(n===pages.length-1)draw(g,Fo,y,'#dde9f3','#111111',1);
+  g.strokeStyle='#ccd';g.lineWidth=1;g.beginPath();g.moveTo(M,PH-M-4);g.lineTo(PW-M,PH-M-4);g.stroke();
+  g.fillStyle='#555';g.font=`400 13px ${FF}`;g.textAlign='center';g.direction='rtl';g.fillText(`${title} — صفحة ${n+1} من ${pages.length}`,PW/2,PH-M+10);
+  if(n)pdf.addPage('a4',land?'landscape':'portrait');pdf.addImage(c.toDataURL('image/jpeg',0.93),'JPEG',0,0,land?297:210,land?210:297)});
+ pdf.save(fn+'.pdf')}
 async function runExport(fmt,t,L,cols){const head=['م',...cols.map(c=>c[1])],body=L.map((s,i)=>[i+1,...cols.map(c=>c[4]?money(c[2](s)):c[2](s))]),foot=['الإجمالي',...cols.map(c=>c[4]?money(L.reduce((a,s)=>a+Number(c[2](s)),0)):'')];
  const title=S.set.title||'مركز جودة التعليم',fn=(S.view==='exp'?'expenses-':'students-')+today();
  try{toast('جاري تجهيز الملف...');if(fmt==='docx')await mkDocx(title,t,head,body,foot,cols,fn);else await mkPdf(title,t,head,body,foot,cols,fn);closeM()}
