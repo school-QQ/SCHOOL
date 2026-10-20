@@ -21,7 +21,8 @@ const status=s=>{const p=paidA(s),f=feeOf(s);return p===0?['لم يدفع','r']:
 const money=n=>Number(n).toLocaleString('en');
 const cn=s=>(S.classes.find(c=>c.id===s.class_id)||{}).name||'';
 const wa=p=>{let d=String(p||'').replace(/\D/g,'');if(d.startsWith('00'))d=d.slice(2);else if(d.startsWith('0'))d=C.DEFAULT_COUNTRY_CODE+d.slice(1);else if(d.length<=9)d=C.DEFAULT_COUNTRY_CODE+d;return d};
-const acts=s=>`<div class="act">${s.phone?`<a class="ib" href="tel:${esc(s.phone)}">📞</a><a class="ib" href="https://wa.me/${wa(s.phone)}" target="_blank" rel="noopener">💬</a>`:''}<button class="ib" data-a="edit" data-id="${s.id}">✏️</button></div>`;
+const IC={ph:'<svg viewBox="0 0 24 24"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z"/></svg>',wa:'<svg viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-11.8 7L4 20l1.2-4.6A8 8 0 1 1 21 12z"/><path d="M9 9.5c.5 2.5 2.5 4.5 5 5l1-1.5-2-1-.8.8c-.8-.4-1.5-1.1-1.9-1.9l.8-.8-1-2z"/></svg>',ed:'<svg viewBox="0 0 24 24"><path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4z"/></svg>',dl:'<svg viewBox="0 0 24 24"><path d="M12 4v11m0 0-4-4m4 4 4-4M5 20h14"/></svg>'};
+const acts=s=>`<div class="act">${s.phone?`<a class="ib" href="tel:${esc(s.phone)}" title="اتصال">${IC.ph}</a><a class="ib wa" href="https://wa.me/${wa(s.phone)}" target="_blank" rel="noopener" title="واتساب">${IC.wa}</a>`:''}<button class="ib" data-a="edit" data-id="${s.id}" title="تعديل">${IC.ed}</button></div>`;
 // ---- الدخول
 function loginView(msg){$('#bar').hidden=true;$('#main').innerHTML=`<div class="login"><h3>تسجيل الدخول</h3>${F('u','اسم المستخدم')}${F('p','كلمة السر','','password')}<p class="err" id="le">${msg||''}</p><button class="pri" style="width:100%" data-a="login">دخول</button></div>`}
 function passView(){$('#bar').hidden=true;$('#main').innerHTML=`<div class="login"><h3>تغيير كلمة السر</h3><p class="note">هذا أول دخول لك، اختر كلمة سر جديدة.</p>${F('np','كلمة السر الجديدة','','password')}${F('np2','أعد كتابتها','','password')}<p class="err" id="pe"></p><button class="pri" style="width:100%" data-a="chp">حفظ</button></div>`}
@@ -35,14 +36,13 @@ async function boot(){const{data:{session}}=await sb.auth.getSession();if(!sessi
  if(error||!p){await sb.auth.signOut();return loginView('هذا الحساب غير مفعّل في النظام')}
  S.me=p;if(p.must_change)return passView();
  $('#bar').hidden=false;$('#admb').hidden=p.role!=='admin';
- $('#main').innerHTML=`<div class="tools"><input id="q" placeholder="🔍 بحث عن طالب" oninput="render()"><button class="chip" data-a="flt" data-k="all">الكل</button><button class="chip" data-a="flt" data-k="sib">لديه أخ</button><button class="chip" data-a="flt" data-k="unp">لم يدفعوا هذا الشهر</button></div><div id="list"></div>`;
+ $('#main').innerHTML=`<div class="tools"><input id="q" placeholder="ابحث عن طالب..." oninput="render()"><div class="chips"><button class="chip" data-a="flt" data-k="all">الكل</button><button class="chip" data-a="flt" data-k="sib">لديه أخ</button><button class="chip" data-a="flt" data-k="unp">لم يدفعوا هذا الشهر</button></div></div><div id="list"></div>`;
  await load()}
 async function load(){const R=await Promise.all([sb.from('classes').select('*').order('sort'),sb.from('students').select('*').order('name'),sb.from('payments').select('*').order('paid_on',{ascending:false}),sb.from('settings').select('*')]);
  const e=R.map(r=>r.error).find(Boolean);if(e)return toast('خطأ في تحميل البيانات: '+e.message,1);
  S.classes=R[0].data;S.students=R[1].data;S.pays=R[2].data;S.set=Object.fromEntries(R[3].data.map(r=>[r.key,r.value]));render()}
 // ---- العرض
-const sub=s=>{const st=status(s);return `<div class="sub"><span class="b ${st[1]}">${st[0]}</span><span>مدفوع هذا الشهر: <b>${money(paidM(s))}</b></span><span>المتبقي: <b>${money(remain(s))}</b></span></div>`};
-const row=s=>`<div class="row"><div class="nm" data-a="prof" data-id="${s.id}"><div class="n">${esc(s.name)}${s.has_sibling?' 👫':''}</div>${sub(s)}</div>${acts(s)}</div>`;
+const row=s=>{const st=status(s);return `<div class="row"><div class="av">${esc([...s.name.trim()][0]||'؟')}</div><div class="nm" data-a="prof" data-id="${s.id}"><div class="n">${esc(s.name)}${s.has_sibling?'<span class="sib">لديه أخ</span>':''}</div><div class="sub"><span class="b ${st[1]}">${st[0]}</span><span>هذا الشهر <b>${money(paidM(s))}</b></span><span>المتبقي <b>${money(remain(s))}</b></span></div></div>${acts(s)}</div>`};
 const kv=(a,b)=>`<div class="kv"><span>${a}</span><b>${b}</b></div>`;
 const card=s=>{const o=S.openU[s.id];return `<div class="card"><div class="ch2" data-a="tu" data-id="${s.id}"><span>${o?'▾':'▸'} ${esc(s.name)}</span><span class="b r">المتبقي ${money(remain(s))}</span></div>${o?`<div class="det">${kv('الصف',esc(cn(s)))}${kv('ولي الأمر',esc(s.guardian_name||'-'))}${kv('الجوال',esc(s.phone||'-'))}${kv('الرسوم الإجمالية',money(feeOf(s)))}${kv('إجمالي المدفوع',money(paidA(s)))}${kv('مدفوع هذا الشهر',money(paidM(s)))}${kv('المتبقي',money(remain(s)))}<div class="dact">${acts(s)}<button class="pri" data-a="prof" data-id="${s.id}">📋 ملف الطالب</button></div></div>`:''}</div>`};
 A.tu=d=>{S.openU[d.id]=!S.openU[d.id];render()};
@@ -51,7 +51,7 @@ function render(){if(!$('#list'))return;$('#title').textContent=S.set.title||'م
  const q=($('#q').value||'').trim(),m=s=>!q||s.name.includes(q);let h='';
  if(S.flt==='unp'){const L=S.students.filter(s=>unpaid(s)&&m(s));h=`<button class="pri" style="width:100%;margin-bottom:12px" data-a="dl" data-t="unpaid">⬇️ تحميل هذه القائمة (PDF / Word)</button><p class="note">${L.length} طالب — اضغط على الاسم لعرض البيانات</p>`+(L.map(card).join('')||'<p class="empty">الجميع دفع هذا الشهر ✅</p>')}
  else h=S.classes.map(c=>{const L=S.students.filter(s=>s.class_id===c.id&&m(s)&&(S.flt!=='sib'||s.has_sibling)),op=S.open[c.id]||q;
-  return `<section class="cls"><div class="ch"><button class="ct" data-a="tog" data-id="${c.id}">${op?'▾':'▸'} 📁 ${esc(c.name)} <b>${L.length}</b></button><button class="ib" data-a="ren" data-id="${c.id}">✏️</button><button class="ib" data-a="dl" data-t="class" data-id="${c.id}">⬇️</button></div>${op?(L.map(row).join('')||'<p class="empty">لا يوجد طلاب</p>'):''}</section>`}).join('');
+  return `<section class="cls"><div class="ch"><button class="ct" data-a="tog" data-id="${c.id}">${op?'▾':'▸'} 📁 ${esc(c.name)} <b>${L.length}</b></button><button class="ib" data-a="ren" data-id="${c.id}" title="تعديل الاسم">${IC.ed}</button><button class="ib" data-a="dl" data-t="class" data-id="${c.id}" title="تحميل">${IC.dl}</button></div>${op?(L.map(row).join('')||'<p class="empty">لا يوجد طلاب</p>'):''}</section>`}).join('');
  $('#list').innerHTML=h}
 // ---- الحفظ الحقيقي (يتأكد أن السطر رجع من قاعدة البيانات)
 async function db(q,ok){const{data,error}=await q.select();if(error||!data||!data.length){toast('⚠️ لم يُحفظ! '+(error?error.message:'تحقق من الصلاحيات'),1);return false}closeM();await load();toast(ok||'تم الحفظ في قاعدة البيانات ✅');return true}
@@ -85,7 +85,7 @@ A.mk=async()=>{const{data:{session}}=await sb.auth.getSession();
 // ---- التحميل (PDF / Word)
 const dstr=s=>allp(s).slice().sort((a,b)=>a.paid_on<b.paid_on?-1:1).map(p=>p.paid_on+' : '+money(p.amount)).join('\n');
 const COLS=[['name','الاسم',s=>s.name,4],['cls','الصف',cn,2],['g','ولي الأمر',s=>s.guardian_name||'',3],['ph','رقم التواصل',s=>s.phone||'',3],['fee','الرسوم الإجمالية',feeOf,2,1],['paid','إجمالي المدفوع',paidA,2,1],['rem','المتبقي',remain,2,1],['pm','مدفوع هذا الشهر',paidM,2,1],['log','سجل جميع الدفعات',dstr,5]];
-A.dl=d=>M(`<h3>تحميل الجدول</h3><p>الصيغة:</p><label class="ck"><input type="radio" name="fmt" value="pdf" checked> PDF</label><label class="ck"><input type="radio" name="fmt" value="docx"> Word (DOCX)</label><p>الخانات:</p>${COLS.map(c=>`<label class="ck"><input type="checkbox" class="dk" value="${c[0]}" ${['name','ph','fee','paid','rem','log'].includes(c[0])?'checked':''}> ${c[1]}</label>`).join('')}<div class="bt"><button class="pri" data-a="doDl" data-t="${d.t}" data-id="${d.id||''}">⬇️ تنزيل</button><button data-a="x">إلغاء</button></div>`);
+A.dl=d=>M(`<h3>تحميل الجدول</h3><h4>١) اختر الخانات التي تريدها في الجدول</h4><div class="cols">${COLS.map(c=>`<label><input type="checkbox" class="dk" value="${c[0]}" ${['name','ph','fee','paid','rem','log'].includes(c[0])?'checked':''}><span>${c[1]}</span></label>`).join('')}</div><h4>٢) اضغط على صيغة الملف لبدء التنزيل</h4><div class="bt"><button class="pri" data-a="doDl" data-f="pdf" data-t="${d.t}" data-id="${d.id||''}">📄 تنزيل PDF</button><button class="gold" data-a="doDl" data-f="docx" data-t="${d.t}" data-id="${d.id||''}">📝 تنزيل Word</button></div><button style="width:100%;margin-top:8px" data-a="x">إلغاء</button>`);
 const save=(b,n)=>{const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=n;a.click()};
 async function mkDocx(title,t,head,body,foot,cols,fn){const D=docx,w=[1.3,...cols.map(c=>c[3])],tot=w.reduce((a,b)=>a+b),W=w.map(x=>Math.round(x/tot*15600));
  const cell=(x,i,o)=>new D.TableCell({width:{size:W[i],type:D.WidthType.DXA},shading:o.f?{type:D.ShadingType.CLEAR,fill:o.f,color:'auto'}:undefined,verticalAlign:D.VerticalAlign.CENTER,margins:{top:70,bottom:70,left:90,right:90},children:String(x).split('\n').map(l=>new D.Paragraph({bidirectional:true,alignment:D.AlignmentType.CENTER,children:[new D.TextRun({text:l,bold:!!o.b,color:o.c,rightToLeft:true,font:'Arial',size:20})]}))});
@@ -98,12 +98,12 @@ async function mkPdf(title,t,head,body,foot,cols,fn){if(!window.html2pdf)throw n
  const w=[1.3,...cols.map(c=>c[3])],tot=w.reduce((a,b)=>a+b);
  const td=(x,i,st)=>`<td style="border:1px solid #9aa;padding:7px 6px;text-align:center;vertical-align:middle;width:${(w[i]/tot*100).toFixed(1)}%;${st||''}">${esc(x).replace(/\n/g,'<br>')}</td>`;
  const tr=(a,st)=>`<tr style="page-break-inside:avoid">${a.map((x,i)=>td(x,i,st)).join('')}</tr>`;
- const el=document.createElement('div');el.style.cssText='position:absolute;left:-99999px;top:0;width:1080px;background:#fff;color:#000;direction:rtl;font-family:Tahoma,Arial,sans-serif;font-size:13px;padding:8px';
+ const el=document.createElement('div');el.style.cssText='width:1080px;background:#fff;color:#000;direction:rtl;font-family:Tajawal,Tahoma,Arial,sans-serif;font-size:13px;padding:8px';
  el.innerHTML=`<h2 style="text-align:center;margin:0 0 6px">${esc(title)}</h2><p style="text-align:center;margin:0 0 12px">${esc(t)} — ${today()}</p><table style="width:100%;border-collapse:collapse;table-layout:fixed;direction:rtl"><thead>${tr(head,'background:#14506b;color:#fff;font-weight:bold')}</thead><tbody>${body.map((r,i)=>tr(r,i%2?'background:#f2f7fb':'')).join('')}${tr(foot,'background:#ddebf7;font-weight:bold')}</tbody></table>`;
- document.body.appendChild(el);
- try{await html2pdf().set({margin:8,filename:fn+'.pdf',image:{type:'jpeg',quality:.95},html2canvas:{scale:2,useCORS:true},jsPDF:{unit:'mm',format:'a4',orientation:'landscape'},pagebreak:{mode:['css','legacy']}}).from(el).save()}finally{el.remove()}}
+ const wrap=document.createElement('div');wrap.style.cssText='position:fixed;left:-99999px;top:0';wrap.appendChild(el);document.body.appendChild(wrap);if(document.fonts&&document.fonts.ready)await document.fonts.ready;
+ try{await html2pdf().set({margin:8,filename:fn+'.pdf',image:{type:'jpeg',quality:.95},html2canvas:{scale:2,useCORS:true,scrollX:0,scrollY:0,windowWidth:1100},jsPDF:{unit:'mm',format:'a4',orientation:'landscape'},pagebreak:{mode:['css','legacy']}}).from(el).save()}finally{wrap.remove()}}
 A.doDl=async d=>{const k=[...document.querySelectorAll('.dk:checked')].map(x=>x.value);if(!k.length)return toast('اختر خانة واحدة على الأقل',1);
- const fmt=(document.querySelector('[name=fmt]:checked')||{}).value||'pdf';let L,t;
+ const fmt=d.f==='docx'?'docx':'pdf';let L,t;
  if(d.t==='class'){L=S.students.filter(s=>s.class_id==d.id);t='الصف: '+S.classes.find(c=>c.id==d.id).name}else if(d.t==='student'){L=S.students.filter(s=>s.id==d.id);t='الطالب: '+L[0].name}else{L=S.students.filter(unpaid);t='لم يدفعوا هذا الشهر'}
  if(!L.length)return toast('لا يوجد طلاب في هذه القائمة',1);
  const cols=COLS.filter(c=>k.includes(c[0])),head=['م',...cols.map(c=>c[1])];
