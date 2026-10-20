@@ -42,7 +42,9 @@ async function load(){const R=await Promise.all([sb.from('classes').select('*').
 // ---- التنقل: الرئيسية / الطلاب / المصروفات
 const STU_HTML=`<div class="tools"><input id="q" placeholder="ابحث عن طالب..." oninput="render()"><div class="chips"><button class="chip" data-a="flt" data-k="all">الكل</button><button class="chip" data-a="flt" data-k="unp">لم يدفعوا هذا الشهر</button></div></div><div id="list"></div>`;
 const MN=['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
-function refresh(){const v=S.view;$('#bar').hidden=false;$('#homeb').hidden=v==='home';$('#addb').hidden=v!=='students';$('#admb').hidden=!S.me||S.me.role!=='admin';
+const showErr=e=>{console.error(e);const m=$('#main');if(m)m.innerHTML=`<div class="card"><div class="det"><p class="err">حدث خطأ في عرض الصفحة: ${esc(e&&e.message)}</p><p class="note">أرسل لي هذه الرسالة لإصلاحها.</p><button class="pri" data-a="home">العودة للرئيسية</button></div></div>`};
+function refresh(){try{refresh0()}catch(e){showErr(e)}}
+function refresh0(){const v=S.view;$('#bar').hidden=false;$('#homeb').hidden=v==='home';$('#addb').hidden=v!=='students';$('#admb').hidden=!S.me||S.me.role!=='admin';
  if(v==='students'){if(!$('#list'))$('#main').innerHTML=STU_HTML;render()}else if(v==='exp')expView();else if(v==='tot')totView();else homeView()}
 function go(v){S.view=v;$('#main').innerHTML='';refresh()}
 A.go=d=>go(d.v);A.home=()=>go('home');
@@ -53,6 +55,8 @@ function totView(){const ys=[...new Set([...S.pays.map(p=>p.paid_on.slice(0,4)),
  const P=S.pays.filter(p=>f(p.paid_on)),E=S.exp.filter(e=>f(e.spent_on)),pi=sum(P),ex=sum(E),net=pi-ex;
  $('#main').innerHTML=`<div class="tools"><div class="fl"><select id="ty"><option value="">كل السنوات</option>${ys.map(y=>`<option ${y===S.ty?'selected':''}>${y}</option>`).join('')}</select><select id="tm"><option value="">كل الأشهر</option>${MN.map((n,i)=>{const v=String(i+1).padStart(2,'0');return `<option value="${v}" ${v===S.tm?'selected':''}>${n}</option>`}).join('')}</select></div></div><div class="tot"><div class="tl"><span>إجمالي المدفوعات من الطلاب (${P.length} دفعة)</span><b>${money(pi)}</b></div><div class="tl"><span>إجمالي المصروفات (${E.length})</span><b>− ${money(ex)}</b></div><div class="tl net ${net<0?'neg':''}"><span>الإجمالي بعد خصم المصروفات</span><b>${money(net)}</b></div></div><p class="note">الإجمالي = المدفوعات − المصروفات</p>`;
  $('#ty').onchange=e=>{S.ty=e.target.value;totView()};$('#tm').onchange=e=>{S.tm=e.target.value;totView()}}
+const lst=k=>{try{const a=JSON.parse(S.set[k]||'[]');return Array.isArray(a)?a:[]}catch(e){return[]}};
+const expFilt=()=>S.exp.filter(e=>e.spent_on.slice(0,4)===S.ey&&(S.em==='00'||e.spent_on.slice(5,7)===S.em)&&(!S.ec||e.category===S.ec));
 function expView(){if(S.expErr){$('#main').innerHTML='<div class="card"><div class="det"><p>جدول المصروفات غير مُنشأ بعد. شغّل ملف step3-expenses.sql في Supabase (SQL Editor) ثم حدّث الصفحة.</p></div></div>';return}
  if(S.ec&&!lst('exp_reasons').includes(S.ec))S.ec='';
  const years=[...new Set([String(new Date().getFullYear()),S.ey,...S.exp.map(e=>e.spent_on.slice(0,4))])].sort().reverse();
@@ -176,6 +180,7 @@ A.doDl=d=>{const k=picked();if(!k.length)return toast('اختر خانة واح�
 A.doDlE=d=>{const k=picked();if(!k.length)return toast('اختر خانة واحدة على الأقل',1);const L=expFilt().slice().sort((a,b)=>a.spent_on<b.spent_on?-1:1);if(!L.length)return toast('لا توجد مصروفات',1);
  runExport(d.f==='docx'?'docx':'pdf','المصروفات: '+S.ey+' — '+(S.em==='00'?'كل الأشهر':MN[+S.em-1])+(S.ec?' — '+S.ec:''),L,ECOLS.filter(c=>k.includes(c[0])))};
 // ---- الأحداث
-document.addEventListener('click',e=>{if(e.target.id==='modal')return closeM();const t=e.target.closest('[data-a]');if(t&&A[t.dataset.a])A[t.dataset.a](t.dataset)});
+document.addEventListener('click',e=>{if(e.target.id==='modal')return closeM();const t=e.target.closest('[data-a]');if(!t||!A[t.dataset.a])return;try{const r=A[t.dataset.a](t.dataset);if(r&&r.catch)r.catch(x=>toast('خطأ: '+x.message,1))}catch(x){console.error(x);toast('خطأ: '+x.message,1)}});
+window.addEventListener('unhandledrejection',e=>toast('خطأ: '+(e.reason&&e.reason.message),1));
 document.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.id==='p')A.login()});
 boot();
